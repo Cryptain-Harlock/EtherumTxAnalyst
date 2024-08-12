@@ -1,6 +1,4 @@
 import { ethers } from "ethers";
-import {HttpsProxyAgent} from "https-proxy-agent";
-import fetch from "cross-fetch";
 
 async function getSepoliaBalance(address: string) {
   const provider = new ethers.JsonRpcProvider(
