@@ -1,12 +1,10 @@
 import { ethers } from "ethers";
 import { Interface } from "@ethersproject/abi";
 
-// WebSocket provider URL
 const provider = new ethers.WebSocketProvider(
-  "wss://mainnet.infura.io/ws/v3/89ad3510465c4595b5a193efd2e03937"
+  "wss://sepolia.infura.io/ws/v3/89ad3510465c4595b5a193efd2e03937"
 );
 
-// ABI interfaces for ERC20, ERC721, and ERC1155
 const ERC20_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
   "event Transfer(address indexed from, address indexed to, uint256 value)",
@@ -28,7 +26,7 @@ const erc1155Interface = new Interface(ERC1155_ABI);
 
 // List of addresses to monitor
 const monitoredAddresses = ["0x2AD5275aEfb3E240aD15cD24f7Efe4948cC5A480"];
-
+console.log(`ERC20: ${erc20Interface}\n\nERC721: ${erc721Interface}\n\nERC1155: ${erc1155Interface}\n\nWallet Address: ${monitoredAddresses}`)
 // Generic function to get balance (handles both ERC20 and ERC721)
 async function getBalance(
   tokenAddress: string,
@@ -55,7 +53,7 @@ async function getBalance(
 
 // Listen for pending transactions
 provider.on("pending", async (txHash) => {
-  //   console.log(`Monitoring pending transactions: ${txHash}`);
+    console.log(`Monitoring pending transactions: ${txHash}`);
   try {
     const tx = await provider.getTransaction(txHash);
 
@@ -130,7 +128,7 @@ provider.on("pending", async (txHash) => {
             console.log(
               `Post-Balance (To): ${ethers.formatUnits(postBalanceTo, 18)}`
             );
-            console.log(`Transaction Link: https://etherscan.io/tx/${txHash}`);
+            console.log(`Transaction Link: https://sepolia.etherscan.io/tx/${txHash}`);
           }
         } else if (isERC721) {
           const tokenId = decodedInput.args[2];
@@ -151,7 +149,7 @@ provider.on("pending", async (txHash) => {
             console.log(`Post-Balance (From): ${postBalanceFrom}`);
             console.log(`Pre-Balance (To): ${preBalanceTo}`);
             console.log(`Post-Balance (To): ${postBalanceTo}`);
-            console.log(`Transaction Link: https://etherscan.io/tx/${txHash}`);
+            console.log(`Transaction Link: https://sepolia.etherscan.io/tx/${txHash}`);
           }
         } else if (isERC1155) {
           const tokenId = decodedInput.args[2];
@@ -192,7 +190,7 @@ provider.on("pending", async (txHash) => {
             console.log(`Post-Balance (From): ${postBalanceFrom}`);
             console.log(`Pre-Balance (To): ${preBalanceTo}`);
             console.log(`Post-Balance (To): ${postBalanceTo}`);
-            console.log(`Transaction Link: https://etherscan.io/tx/${txHash}`);
+            console.log(`Transaction Link: https://sepolia.etherscan.io/tx/${txHash}`);
           }
         }
       }
