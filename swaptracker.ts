@@ -1,61 +1,71 @@
 import { ethers } from "ethers";
 
-// Define Uniswap ABI for event decoding
-const UNISWAP_ROUTER_ABI = [
-  "event Swap(address indexed sender, address indexed fromToken, address indexed toToken, uint amountIn, uint amountOut)"
-];
+const provider = new ethers.JsonRpcProvider(
+  "https://mainnet.infura.io/v3/89ad3510465c4595b5a193efd2e03937"
+);
 
-const INFURA_PROJECT_ID = "89ad3510465c4595b5a193efd2e03937";
-const PROVIDER = new ethers.JsonRpcProvider(`https://sepolia.infura.io/v3/${INFURA_PROJECT_ID}`);
-const UNISWAP_ROUTER_ADDRESS = "0x2AD5275aEfb3E240aD15cD24f7Efe4948cC5A480";
+const routerAddresses = {
+  "0x7a250d5630b4cf539739df2c5dacb4c659f2488d": "Uniswap V2: Router 2",
+  "0xe592427a0aece92de3edee1f18e0157c05861564": "Uniswap V3 Router",
+};
 
-// Function to get token details from transaction
-async function getTokenDetails(tokenAddress: string) {
-  const tokenContract = new ethers.Contract(tokenAddress, ["function name() view returns (string)", "function symbol() view returns (string)"], PROVIDER);
-  const [name, symbol] = await Promise.all([tokenContract.name(), tokenContract.symbol()]);
-  return { name, symbol };
-}
+const getDexRouter = (accountAddresses: string[]) => {
+  return accountAddresses
+    .filter((item) => routerAddresses[item.toLowerCase()])
+    .map((item) => routerAddresses[item.toLowerCase()]);
+};
 
-// Function to monitor pending transactions
-async function monitorPendingTransactions() {
-  PROVIDER.on("pending", async (txHash) => {
-    const tx = await PROVIDER.getTransaction(txHash);
-    
-    if (tx && tx.to === UNISWAP_ROUTER_ADDRESS) {
-      try {
-        const abiCoder = new ethers.AbiCoder();
-        const decodedData = abiCoder.decode(
-          ["address", "address", "address", "uint256", "uint256"],
-          tx.data
-        );
-        
-        const [sender, fromToken, toToken, amountIn, amountOut] = decodedData;
-        const fromTokenDetails = await getTokenDetails(fromToken);
-        const toTokenDetails = await getTokenDetails(toToken);
+const SWAP_EVENT_SIGNATURE = ethers.id(
+  "Swap(address,uint256,uint256,uint256,uint256,address)"
+);
 
-        const balanceBefore = await PROVIDER.getBalance(sender);
-        // Call your function to process or wait for the transaction to be mined before fetching balance after swap
+const monitoredAddress = "";
 
-        const balanceAfter = await PROVIDER.getBalance(sender);
+async function getTransactionDetails(txHash: string) {
+  try {
+    const transaction = await provider.getTransaction(txHash);
+    const receipt = await provider.getTransactionReceipt(txHash);
 
-        const balanceDifference = ethers.formatEther(balanceAfter.sub(balanceBefore));
-
-        console.log(`Swap detected:
-          Sender: ${sender}
-          From Token: ${fromTokenDetails.name} (${fromTokenDetails.symbol})
-          To Token: ${toTokenDetails.name} (${toTokenDetails.symbol})
-          Amount In: ${ethers.formatEther(amountIn)}
-          Amount Out: ${ethers.formatEther(amountOut)}
-          Balance Before: ${ethers.formatEther(balanceBefore)}
-          Balance After: ${ethers.formatEther(balanceAfter)}
-          Balance Difference: ${balanceDifference}
-          Transaction Hash: ${txHash}`);
-      } catch (error) {
-        console.error("Error decoding transaction data:", error);
-      }
+    if (!transaction || !receipt) {
+      console.log("Transaction not found or receipt not yet available");
+      return;
     }
-  });
+
+    console.log("✅ Transaction Details:");
+    console.log(`Hash: ${transaction.hash}`);
+    console.log(`From: ${transaction.from}`);
+    console.log(`To: ${transaction.to}`);
+    console.log(`Value: ${ethers.formatEther(transaction.value)} ETH`);
+    console.log(
+      `Gas Price: ${ethers.formatUnits(transaction.gasPrice, "gwei")} Gwei`
+    );
+    console.log(`Gas Used: ${receipt.gasUsed.toString()}`);
+
+    // Identify the router used
+    const routerUsed =
+      getDexRouter([transaction.to || ""])[0] || "Unknown Router";
+    console.log(`Router: ${routerUsed} (${transaction.to})`);
+
+    // Parsing logs to identify events
+    console.log("Logs:");
+    for (const log of receipt.logs) {
+      const eventSignature = log.topics[0];
+
+      if (eventSignature === SWAP_EVENT_SIGNATURE) {
+        console.log("Event: Swap");
+      } else {
+        console.log("Event: Other");
+      }
+
+      console.log(`Address: ${log.address}`);
+      console.log("---");
+    }
+  } catch (error) {
+    console.error("Error fetching transaction details:", error);
+  }
 }
 
-// Start monitoring
-monitorPendingTransactions().catch(console.error);
+const txHash =
+  "0xcd6ecb96d676915a273af77eed9517891ebfcb39357fbe036319623f5a9a4a5c";
+
+getTransactionDetails(txHash);
