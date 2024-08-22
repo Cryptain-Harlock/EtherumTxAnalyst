@@ -178,7 +178,7 @@ async function checkPendingTransactions() {
         if (path.length >= 2) {
           const tokenA = await getTokenDetails(path[0]);
           const tokenB = await getTokenDetails(path[path.length - 1]);
-          console.log(`- ${swapType}`);
+          console.log(`✅ ${swapType}`);
           console.log(
             `- Swap: ${tokenA.symbol.toUpperCase()} -> ${tokenB.symbol.toUpperCase()}`
           );
@@ -194,20 +194,23 @@ async function checkPendingTransactions() {
             Number(amountIn) / Math.pow(10, Number(tokenA.decimals));
           const poolRate = Number(tokenA.price) / Number(tokenB.price);
           console.log(`Amount In:\t${amountInExact}\nPool Rate:\t${poolRate}`);
-          // const gasPrice = ethers.formatUnits(transaction.gasPrice, "gwei");
-          // const gasLimit = Number(transaction.gasLimit);
-          // const gasFeeETH = gasPrice * gasLimit;
-          // const ethPrice = await getTokenDetails(
-          //   "0x0000000000000000000000000000000000000000"
-          // ); // Fetch ETH price from CoinGecko
-          // const gasFeeUSD = gasFeeETH * ethPrice.price;
+          // const gasPrice = Number(ethers.formatUnits(tx.gasPrice, "gwei"));
+          // const gasLimit = Number(tx.gasLimit);
+          const gasFeeETH =
+            Number(ethers.formatUnits(tx.gasPrice, "gwei")) *
+            Number(tx.gasLimit);
+          const ethPrice = await getTokenDetails(
+            "0x0000000000000000000000000000000000000000"
+          );
+          const gasFeeUSD = gasFeeETH * Number(ethPrice.price);
 
-          // const amountOut = Number(amountInExact * poolRate - gasFeeUSD);
+          const amountOut = Number(amountInExact * poolRate - gasFeeUSD);
+          console.log(`Amount Out:\t${amountOut}`);
         } else {
-          console.log(`Transaction type: ${swapType}`);
+          console.log(`🚫 ${swapType}`);
         }
         console.log(`Value: ${ethers.formatEther(tx.value)} ETH`);
-        console.log(`Transaction Hash: https://etherscan.io/tx/${tx.hash}`);
+        console.log(`🔗 Tx: https://etherscan.io/tx/${tx.hash}`);
         console.log("---------------------------------");
         const checkReceipt = async () => {
           const receipt = await provider.getTransactionReceipt(tx.hash);
