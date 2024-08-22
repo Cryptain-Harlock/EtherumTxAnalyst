@@ -1,205 +1,262 @@
 import { ethers } from "ethers";
-import { Interface } from "@ethersproject/abi";
+import fetch from "node-fetch";
 
-const provider = new ethers.WebSocketProvider(
-  "wss://sepolia.infura.io/ws/v3/89ad3510465c4595b5a193efd2e03937"
+const provider = new ethers.JsonRpcProvider(
+  `https://eth-mainnet.g.alchemy.com/v2/lBsnumlNVsOQUAoLYFwEFlnLkqYmkISK`
 );
 
-const ERC20_ABI = [
-  "function balanceOf(address owner) view returns (uint256)",
-  "event Transfer(address indexed from, address indexed to, uint256 value)",
-];
+const monitoredAddress = [
+  "0xb0ba33566bd35bcb80738810b2868dc1ddd1f0e9",
+  "0x3b40af8e80b09f4a54b1eb763031d4880f765bdc",
+  "0xab7b44ae25af88d306dc0a5c6c39bbeb8916eabb",
+  "0x49c543e8873aeda1b60c176f55a78fc62f9c9fbb",
+  "0x3ccce09b4ad94968f269375c0999134a6617f795",
+  "0xacbcb2724cfafb839c752d71997a8a7a16989b2e",
+  "0x16d59f67bd39ac0d952e48648548217b62183403",
+].map((address) => address.toLowerCase());
 
-const ERC721_ABI = [
-  "function balanceOf(address owner) view returns (uint256)",
-  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
-];
+const processedTransactions = new Set<string>();
+const pendingTransactionsTime = new Map<string, number>();
 
-const ERC1155_ABI = [
-  "function balanceOf(address owner, uint256 id) view returns (uint256)",
-  "event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value)",
-];
+async function getTokenDetails(tokenAddress: string) {
+  const url = `https://api.coingecko.com/api/v3/coins/ethereum/contract/${tokenAddress}`;
+  const options = {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      "x-cg-demo-api-key": "CG-AyeKotUVrJVWTJaLagAazEYb",
+    },
+  };
 
-const erc20Interface = new Interface(ERC20_ABI);
-const erc721Interface = new Interface(ERC721_ABI);
-const erc1155Interface = new Interface(ERC1155_ABI);
-
-// List of addresses to monitor
-const monitoredAddresses = ["0x2AD5275aEfb3E240aD15cD24f7Efe4948cC5A480"];
-console.log(`ERC20: ${erc20Interface}\n\nERC721: ${erc721Interface}\n\nERC1155: ${erc1155Interface}\n\nWallet Address: ${monitoredAddresses}`)
-// Generic function to get balance (handles both ERC20 and ERC721)
-async function getBalance(
-  tokenAddress: string,
-  walletAddress: string,
-  isNFT: boolean = false,
-  tokenId?: string
-) {
-  let contract, balance;
-  if (isNFT) {
-    contract = new ethers.Contract(
-      tokenAddress,
-      tokenId ? ERC1155_ABI : ERC721_ABI,
-      provider
-    );
-    balance = tokenId
-      ? await contract.balanceOf(walletAddress, tokenId)
-      : await contract.balanceOf(walletAddress);
-  } else {
-    contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-    balance = await contract.balanceOf(walletAddress);
+  interface CoinGeckoTokenData {
+    name: string;
+    symbol: string;
+    market_data: {
+      circulating_supply: number;
+      current_price: {
+        usd: number;
+      };
+    };
+    detail_platforms: {
+      ethereum: {
+        decimal_place: number;
+      };
+    };
   }
-  return balance;
-}
-
-// Listen for pending transactions
-provider.on("pending", async (txHash) => {
-    console.log(`Monitoring pending transactions: ${txHash}`);
   try {
-    const tx = await provider.getTransaction(txHash);
-
-    if (
-      tx &&
-      (monitoredAddresses.includes(tx.from) ||
-        monitoredAddresses.includes(tx.to || ""))
-    ) {
-      console.log(`Monitored Address Transaction: ${txHash}`);
-
-      if (tx.data !== "0x") {
-        // Check if the transaction has input data
-        let decodedInput;
-        let isERC20 = false;
-        let isERC721 = false;
-        let isERC1155 = false;
-
-        try {
-          decodedInput = erc20Interface.parseTransaction({
-            data: tx.data,
-            value: tx.value,
-          });
-          isERC20 = true;
-        } catch {}
-
-        if (!isERC20) {
-          try {
-            decodedInput = erc721Interface.parseTransaction({
-              data: tx.data,
-              value: tx.value,
-            });
-            isERC721 = true;
-          } catch {}
-        }
-
-        if (!isERC20 && !isERC721) {
-          try {
-            decodedInput = erc1155Interface.parseTransaction({
-              data: tx.data,
-              value: tx.value,
-            });
-            isERC1155 = true;
-          } catch {}
-        }
-
-        const from = tx.from;
-        const to = decodedInput.args[0]; // Recipient address
-        const tokenAddress = tx.to || ""; // Assuming `to` is the token or NFT contract address
-
-        if (isERC20) {
-          const preBalanceFrom = await getBalance(tokenAddress, from, false);
-          const preBalanceTo = await getBalance(tokenAddress, to, false);
-
-          const receipt = await provider.waitForTransaction(txHash);
-          if (receipt && receipt.status === 1) {
-            const postBalanceFrom = await getBalance(tokenAddress, from, false);
-            const postBalanceTo = await getBalance(tokenAddress, to, false);
-
-            console.log(`ERC20 Swap Detected`);
-            console.log(`Swapped Token: ${tokenAddress}`);
-            console.log(`From: ${from}`);
-            console.log(`To: ${to}`);
-            console.log(
-              `Pre-Balance (From): ${ethers.formatUnits(preBalanceFrom, 18)}`
-            );
-            console.log(
-              `Post-Balance (From): ${ethers.formatUnits(postBalanceFrom, 18)}`
-            );
-            console.log(
-              `Pre-Balance (To): ${ethers.formatUnits(preBalanceTo, 18)}`
-            );
-            console.log(
-              `Post-Balance (To): ${ethers.formatUnits(postBalanceTo, 18)}`
-            );
-            console.log(`Transaction Link: https://sepolia.etherscan.io/tx/${txHash}`);
-          }
-        } else if (isERC721) {
-          const tokenId = decodedInput.args[2];
-          const preBalanceFrom = await getBalance(tokenAddress, from, true);
-          const preBalanceTo = await getBalance(tokenAddress, to, true);
-
-          const receipt = await provider.waitForTransaction(txHash);
-          if (receipt && receipt.status === 1) {
-            const postBalanceFrom = await getBalance(tokenAddress, from, true);
-            const postBalanceTo = await getBalance(tokenAddress, to, true);
-
-            console.log(`ERC721 Transfer Detected`);
-            console.log(`NFT Contract: ${tokenAddress}`);
-            console.log(`From: ${from}`);
-            console.log(`To: ${to}`);
-            console.log(`Token ID: ${tokenId}`);
-            console.log(`Pre-Balance (From): ${preBalanceFrom}`);
-            console.log(`Post-Balance (From): ${postBalanceFrom}`);
-            console.log(`Pre-Balance (To): ${preBalanceTo}`);
-            console.log(`Post-Balance (To): ${postBalanceTo}`);
-            console.log(`Transaction Link: https://sepolia.etherscan.io/tx/${txHash}`);
-          }
-        } else if (isERC1155) {
-          const tokenId = decodedInput.args[2];
-          const preBalanceFrom = await getBalance(
-            tokenAddress,
-            from,
-            true,
-            tokenId
-          );
-          const preBalanceTo = await getBalance(
-            tokenAddress,
-            to,
-            true,
-            tokenId
-          );
-
-          const receipt = await provider.waitForTransaction(txHash);
-          if (receipt && receipt.status === 1) {
-            const postBalanceFrom = await getBalance(
-              tokenAddress,
-              from,
-              true,
-              tokenId
-            );
-            const postBalanceTo = await getBalance(
-              tokenAddress,
-              to,
-              true,
-              tokenId
-            );
-
-            console.log(`ERC1155 Transfer Detected`);
-            console.log(`NFT Contract: ${tokenAddress}`);
-            console.log(`From: ${from}`);
-            console.log(`To: ${to}`);
-            console.log(`Token ID: ${tokenId}`);
-            console.log(`Pre-Balance (From): ${preBalanceFrom}`);
-            console.log(`Post-Balance (From): ${postBalanceFrom}`);
-            console.log(`Pre-Balance (To): ${preBalanceTo}`);
-            console.log(`Post-Balance (To): ${postBalanceTo}`);
-            console.log(`Transaction Link: https://sepolia.etherscan.io/tx/${txHash}`);
-          }
-        }
-      }
+    const response = await fetch(url, options);
+    const data = (await response.json()) as CoinGeckoTokenData;
+    if (data && data.name && data.symbol) {
+      return {
+        tokenName: data.name,
+        symbol: data.symbol,
+        supply: data.market_data.circulating_supply,
+        decimals: data.detail_platforms.ethereum.decimal_place,
+        price: data.market_data.current_price.usd,
+      };
+    } else {
+      console.error(
+        `Token not found on CoinGecko for address: ${tokenAddress}`
+      );
+      return { tokenName: "Unknown", symbol: "Unknown", supply: "Unknown" };
     }
   } catch (error) {
-    console.error(`Error processing transaction ${txHash}:`, error);
+    console.error("Error fetching token details:", error);
+    return { tokenName: "Unknown", symbol: "Unknown", supply: "Unknown" };
   }
-});
+}
 
-provider.on("error", (err) => {
-  console.error("WebSocket Error: ", err);
-});
+async function decodeInputData(
+  tx: string
+): Promise<{ swapType: string; path: string[]; amountIn: number }> {
+  const uniswapRouterAbi = [
+    "function swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+    "function swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+    "function swapExactETHForTokens(uint256,address[],address,uint256)",
+    "function swapTokensForExactETH(uint256,uint256,address[],address,uint256)",
+    "function swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
+    "function swapETHForExactTokens(uint256,address[],address,uint256)",
+    "function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+    "function swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
+    "function swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+  ];
+
+  const iface = new ethers.Interface(uniswapRouterAbi);
+  const transaction = await provider.getTransaction(tx);
+
+  if (!transaction) {
+    console.error("Transaction not found");
+    return { swapType: "Unknown", path: [], amountIn: NaN };
+  }
+
+  for (const functionSignature of uniswapRouterAbi) {
+    const functionName = functionSignature.split(" ")[1].split("(")[0];
+
+    try {
+      const decodedData = iface.decodeFunctionData(
+        functionName,
+        transaction.data
+      );
+      if (
+        functionName == "swapExactTokensForTokens" ||
+        functionName == "swapExactETHForTokens" ||
+        functionName == "swapExactETHForTokensSupportingFeeOnTransferTokens"
+      ) {
+        return {
+          swapType: functionName,
+          path: decodedData[1],
+          amountIn: decodedData[0],
+        };
+      } else {
+        return {
+          swapType: functionName,
+          path: decodedData[2],
+          amountIn: decodedData[0],
+        };
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  return { swapType: "🚫 Not a Swap!", path: [], amountIn: NaN };
+}
+
+async function checkPendingTransactions() {
+  const pendingTransactions = await provider.send("eth_getBlockByNumber", [
+    "pending",
+    true,
+  ]);
+  // Comment this part for existing tx
+  // const txhash =
+  //   // "0xceb1183378210b5d447bef1250f36b3e1087e706fc104e72d49265f72df89625"; // Two tokens path
+  //   "0x2f6ff1f6230bff664cd5d3701611f61758fb482a295ec70ddb48ea706e50d3fa"; // Three tokens path
+  // const { swapType, path, amountIn } = await decodeInputData(txhash);
+  // if (path.length >= 2) {
+  //   const tokenA = await getTokenDetails(path[0]);
+  //   const tokenB = await getTokenDetails(path[path.length - 1]);
+  //   console.log(`- ${swapType}`);
+  //   console.log(
+  //     `- Swap: ${tokenA.symbol.toUpperCase()} -> ${tokenB.symbol.toUpperCase()}`
+  //   );
+  //   console.log(
+  //     `  |_${tokenA.tokenName}:\t$ ${tokenA.price}, Decimals: ${tokenA.decimals}`
+  //   );
+  //   console.log(
+  //     `  |_${tokenB.tokenName}:\t$ ${tokenB.price}, Decimals: ${tokenB.decimals}`
+  //   );
+  //   const amountInExact = Number(amountIn) / Math.pow(10, tokenA.decimals);
+  //   const poolRate = Number(tokenA.price / tokenB.price);
+
+  //   const gasPrice = ethers.formatUnits(transaction.gasPrice, "gwei");
+  //   const gasLimit = Number(transaction.gasLimit);
+  //   const gasFeeETH = gasPrice * gasLimit;
+  //   const ethPrice = await getTokenDetails(
+  //     "0x0000000000000000000000000000000000000000"
+  //   ); // Fetch ETH price from CoinGecko
+  //   const gasFeeUSD = gasFeeETH * ethPrice.price;
+
+  //   const amountOut = Number(amountInExact * poolRate - gasFeeUSD);
+  // } else {
+  //   console.log(`Transaction type: ${swapType}\nPath: Not a valid swap path`);
+  // }
+  // console.log(`Transaction Hash: https://etherscan.io/tx/${txhash}`);
+  // console.log("---------------------------------");
+
+  // Comment this part for pending tx
+  if (pendingTransactions && pendingTransactions.transactions) {
+    for (const tx of pendingTransactions.transactions) {
+      if (
+        monitoredAddress.includes(tx.from.toLowerCase()) &&
+        !processedTransactions.has(tx.hash)
+      ) {
+        pendingTransactionsTime.set(tx.hash, Date.now());
+        processedTransactions.add(tx.hash);
+
+        console.log(`💡 Gotcha!\n`);
+        const { swapType, path, amountIn } = await decodeInputData(tx.hash);
+        if (path.length >= 2) {
+          const tokenA = await getTokenDetails(path[0]);
+          const tokenB = await getTokenDetails(path[path.length - 1]);
+          console.log(`- ${swapType}`);
+          console.log(
+            `- Swap: ${tokenA.symbol.toUpperCase()} -> ${tokenB.symbol.toUpperCase()}`
+          );
+          console.log(
+            `  |_${tokenA.tokenName}:\t$ ${tokenA.price?.toLocaleString()}, ` +
+              `Supply: ${tokenA?.toLocaleString()}\t(${tokenA.decimals})`
+          );
+          console.log(
+            `  |_${tokenB.tokenName}:\t$ ${tokenB.price?.toLocaleString()}, ` +
+              `Supply: ${tokenB?.toLocaleString()}\t(${tokenB.decimals})`
+          );
+          const amountInExact =
+            Number(amountIn) / Math.pow(10, Number(tokenA.decimals));
+          const poolRate = Number(tokenA.price) / Number(tokenB.price);
+          console.log(`Amount In:\t${amountInExact}\nPool Rate:\t${poolRate}`);
+          // const gasPrice = ethers.formatUnits(transaction.gasPrice, "gwei");
+          // const gasLimit = Number(transaction.gasLimit);
+          // const gasFeeETH = gasPrice * gasLimit;
+          // const ethPrice = await getTokenDetails(
+          //   "0x0000000000000000000000000000000000000000"
+          // ); // Fetch ETH price from CoinGecko
+          // const gasFeeUSD = gasFeeETH * ethPrice.price;
+
+          // const amountOut = Number(amountInExact * poolRate - gasFeeUSD);
+        } else {
+          console.log(`Transaction type: ${swapType}`);
+        }
+        console.log(`Value: ${ethers.formatEther(tx.value)} ETH`);
+        console.log(`Transaction Hash: https://etherscan.io/tx/${tx.hash}`);
+        console.log("---------------------------------");
+        const checkReceipt = async () => {
+          const receipt = await provider.getTransactionReceipt(tx.hash);
+          if (receipt) {
+            const pendingTime =
+              Date.now() - pendingTransactionsTime.get(tx.hash)!;
+            console.log(
+              `\n🕒 Transaction was pending for ${(pendingTime / 1000).toFixed(
+                2
+              )} seconds`
+            );
+            console.log(
+              `Transaction Status: ${
+                receipt.status === 1 ? "Success" : "Failed"
+              }`
+            );
+            console.log(`Gas Used: ${receipt.gasUsed.toString()}`);
+
+            if (receipt.logs.length > 0) {
+              receipt.logs.forEach((log) => {});
+            }
+            console.log("====================================================");
+          } else {
+            setTimeout(checkReceipt, 1000);
+          }
+        };
+
+        checkReceipt();
+      }
+    }
+  }
+}
+
+function animateMonitoringMessage() {
+  const messages = [
+    "🔍 Monitoring wallet   ",
+    "🔍 Monitoring wallet.  ",
+    "🔍 Monitoring wallet.. ",
+    "🔍 Monitoring wallet...",
+  ];
+  let index = 0;
+
+  setInterval(() => {
+    process.stdout.write(`\r${messages[index]}`);
+    index = (index + 1) % messages.length;
+  }, 1000);
+}
+
+animateMonitoringMessage();
+checkPendingTransactions();
+
+setInterval(checkPendingTransactions, 1000);

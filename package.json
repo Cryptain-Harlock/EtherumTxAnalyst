@@ -13,6 +13,7 @@
     "@ethersproject/abi": "^5.7.0",
     "cross-fetch": "^4.0.0",
     "esrun": "^3.2.26",
+    "eth-graphql": "^1.1.3",
     "ethers": "^6.13.2",
     "https-proxy-agent": "^7.0.5",
     "typescript": "^5.5.4"
