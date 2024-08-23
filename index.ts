@@ -157,10 +157,11 @@ async function checkPendingTransactions() {
           const gasFeeETH =
             Number(ethers.formatUnits(tx.gasPrice, "ether")) *
             Number(tx.gasLimit);
+          console.log("Gas Limit: ", tx.gasLimit);
           const wETH = await getTokenDetails(
             "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
           );
-          const gasFeeUSD = gasFeeETH * Number(wETH.price);
+          const gasFeeUSD = Number(gasFeeETH) * Number(wETH.price);
           console.log(`✅ ${swapType}`);
           console.log(`From: ${tx.from}`);
           console.log(
@@ -175,8 +176,7 @@ async function checkPendingTransactions() {
             `  |_${tokenB.tokenName}:\tCurrent Price: $${tokenB.price}, ` +
               `Supply: ${tokenB.supply}\t`
           );
-          console.log(`Gas Fee: $${gasFeeUSD.toFixed(2)}
-          )}`);
+          console.log(`Gas Fee: $${gasFeeUSD.toFixed(2)}`);
           // console.log(`Value: ${ethers.formatEther(tx.value)} ETH`);
         } else {
           console.log(`🚫 ${swapType}`);
