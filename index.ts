@@ -183,27 +183,39 @@ async function checkPendingTransactions() {
             `- Swap: ${tokenA.symbol.toUpperCase()} -> ${tokenB.symbol.toUpperCase()}`
           );
           console.log(
-            `  |_${tokenA.tokenName}:\t$ ${tokenA.price?.toLocaleString()}, ` +
-              `Supply: ${tokenA?.toLocaleString()}\t(${tokenA.decimals})`
+            `  |_${tokenA.tokenName}:\t$ ${tokenA.price?.toLocaleString(
+              "en-US"
+            )}, ` +
+              `Supply: ${tokenA.supply.toLocaleString("en-US")}\t(${
+                tokenA.decimals
+              })`
           );
           console.log(
-            `  |_${tokenB.tokenName}:\t$ ${tokenB.price?.toLocaleString()}, ` +
-              `Supply: ${tokenB?.toLocaleString()}\t(${tokenB.decimals})`
+            `  |_${tokenB.tokenName}:\t$ ${tokenB.price?.toLocaleString(
+              "en-US"
+            )}, ` +
+              `Supply: ${tokenB.supply.toLocaleString("en-US")}\t(${
+                tokenB.decimals
+              })`
           );
           const amountInExact = (tx.value = 0
             ? Number(amountIn) / Math.pow(10, Number(tokenA.decimals))
             : tx.vlaue);
           const poolRate = Number(tokenA.price) / Number(tokenB.price);
-          console.log(`Amount In:\t${amountInExact}\nPool Rate:\t${poolRate}`);
+          console.log(
+            `Amount In:\t${amountInExact.toLocaleString(
+              "en-US"
+            )}\nPool Rate:\t${poolRate}`
+          );
           // const gasPrice = Number(ethers.formatUnits(tx.gasPrice, "gwei"));
           // const gasLimit = Number(tx.gasLimit);
           const gasFeeETH =
             Number(ethers.formatUnits(tx.gasPrice, "gwei")) *
             Number(tx.gasLimit);
-          const ethPrice = await getTokenDetails(
-            "0x0000000000000000000000000000000000000000"
+          const wETH = await getTokenDetails(
+            "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
           );
-          const gasFeeUSD = gasFeeETH * Number(ethPrice.price);
+          const gasFeeUSD = gasFeeETH * Number(wETH.price);
 
           const amountOut = Number(amountInExact * poolRate - gasFeeUSD);
           console.log(`Amount Out:\t${amountOut}`);
