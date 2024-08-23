@@ -119,7 +119,7 @@ async function decodeInputData(
     }
   }
 
-  return { swapType: "🚫 Not a Swap!", path: [], amountIn: NaN };
+  return { swapType: "Not a Swap!", path: [], amountIn: NaN };
 }
 
 async function checkPendingTransactions() {
@@ -190,8 +190,9 @@ async function checkPendingTransactions() {
             `  |_${tokenB.tokenName}:\t$ ${tokenB.price?.toLocaleString()}, ` +
               `Supply: ${tokenB?.toLocaleString()}\t(${tokenB.decimals})`
           );
-          const amountInExact =
-            Number(amountIn) / Math.pow(10, Number(tokenA.decimals));
+          const amountInExact = (tx.value = 0
+            ? Number(amountIn) / Math.pow(10, Number(tokenA.decimals))
+            : tx.vlaue);
           const poolRate = Number(tokenA.price) / Number(tokenB.price);
           console.log(`Amount In:\t${amountInExact}\nPool Rate:\t${poolRate}`);
           // const gasPrice = Number(ethers.formatUnits(tx.gasPrice, "gwei"));
